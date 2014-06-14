@@ -1,0 +1,7 @@
+# ignore file backups
+*~
+
+# ignore netbeans files
+nbproject/private/
+build/
+dist/
