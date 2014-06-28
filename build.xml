@@ -70,4 +70,10 @@
     nbproject/build-impl.xml file. 
 
     -->
+
+    <target name="-post-jar">
+        <copy todir="dist/lib">
+            <fileset dir="lib"/>
+        </copy>
+    </target>
 </project>

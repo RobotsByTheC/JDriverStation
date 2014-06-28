@@ -1,6 +1,6 @@
 frc_ds = Proto ("frc_ds","FRC Driver Station Protocol")
 
-local MODE_VALS = {[0x0] = "Teleoperated", [0x10] = "Autonomous", [0x2] = "Test"}
+local MODE_VALS = {[0x0] = "Teleoperated", [0x8] = "Autonomous", [0x1] = "Test"}
 local ALLIANCE_COLOR_VALS = {[66] = "Blue", [82] = "Red"}
 local ALLIANCE_POS_VALS = {[49] = "1", [50] = "2", [51] = "3"}
 local fields = {

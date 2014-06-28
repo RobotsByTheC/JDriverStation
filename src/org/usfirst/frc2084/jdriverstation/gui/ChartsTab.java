@@ -4,16 +4,17 @@
  * Open Source Software - may be modified and shared by FRC teams. The code must
  * be accompanied by the BSD license file in the root directory of the project.
  */
-package org.usfirst.frc2084.jdriverstation;
+package org.usfirst.frc2084.jdriverstation.gui;
+
+import javax.swing.JPanel;
 
 /**
  *
  * @author Ben Wolsieffer
  */
-public class IOTab extends DriverStationTab {
+public class ChartsTab extends JPanel {
 
-    public IOTab(MainWindow mainWindow) {
-        super(mainWindow);
+    public ChartsTab() {
     }
 
 }

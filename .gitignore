@@ -1,6 +1,9 @@
 # ignore file backups
 *~
 
+# ignore java crash logs
+hs_err_pid*
+
 # ignore netbeans files
 nbproject/private/
 build/

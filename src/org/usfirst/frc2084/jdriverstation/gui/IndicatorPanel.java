@@ -4,7 +4,7 @@
  * Open Source Software - may be modified and shared by FRC teams. The code must
  * be accompanied by the BSD license file in the root directory of the project.
  */
-package org.usfirst.frc2084.jdriverstation;
+package org.usfirst.frc2084.jdriverstation.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -13,8 +13,12 @@ import java.awt.Font;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import net.java.games.input.Controller;
 import net.miginfocom.layout.CC;
 import net.miginfocom.swing.MigLayout;
+import org.usfirst.frc2084.jdriverstation.communication.CommunicationManager;
+import static org.usfirst.frc2084.jdriverstation.gui.ApplicationElement.*;
+import org.usfirst.frc2084.jdriverstation.input.JoystickManager;
 
 /**
  *
@@ -74,6 +78,32 @@ public class IndicatorPanel extends JPanel {
             joysticksIndicator = new Indicator("Joysticks", Indicator.Color.RED);
             add(joysticksIndicator, indicatorConstraints);
         }
+        updateIndicators();
+        getCommunicationManager().addPropertyChangeListener(CommunicationManager.CONNECTED_PROPERTY, evt -> {
+            updateIndicators();
+        });
+
+        getJoystickManager().addJoystickListener(new JoystickManager.JoystickListener() {
+
+            @Override
+            public void joystickAdded(Controller c) {
+                updateIndicators();
+            }
+
+            @Override
+            public void joystickRemoved(Controller c) {
+                updateIndicators();
+            }
+        });
+    }
+
+    private void updateIndicators() {
+        CommunicationManager cm = getCommunicationManager();
+        JoystickManager jm = getJoystickManager();
+
+        communicationsIndicator.setColor(cm.isConnected() ? Indicator.Color.GREEN : Indicator.Color.RED);
+
+        joysticksIndicator.setColor(jm.getJoysticks().isEmpty() ? Indicator.Color.RED : Indicator.Color.GREEN);
     }
 
 }

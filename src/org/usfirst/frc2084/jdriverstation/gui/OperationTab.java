@@ -4,14 +4,14 @@
  * Open Source Software - may be modified and shared by FRC teams. The code must
  * be accompanied by the BSD license file in the root directory of the project.
  */
-package org.usfirst.frc2084.jdriverstation;
+package org.usfirst.frc2084.jdriverstation.gui;
 
+import com.tulskiy.keymaster.common.Provider;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
+import java.awt.event.KeyEvent;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.ButtonGroup;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
@@ -20,14 +20,21 @@ import javax.swing.JRadioButton;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
-import org.usfirst.frc2084.jdriverstation.communication.Robot;
+import javax.swing.KeyStroke;
+import net.miginfocom.layout.CC;
+import net.miginfocom.swing.MigLayout;
+import org.usfirst.frc2084.dslibrary.Robot;
+import org.usfirst.frc2084.jdriverstation.communication.CommunicationManager;
 import org.usfirst.frc2084.jdriverstation.resources.ResourceManager;
+import static org.usfirst.frc2084.jdriverstation.gui.ApplicationElement.*;
 
 /**
  *
  * @author Ben Wolsieffer
  */
-public class OperationTab extends DriverStationTab {
+public class OperationTab extends JPanel {
+
+    private static final Logger LOGGER = Logger.getLogger(OperationTab.class.getName());
 
     private enum AlliancePosition {
 
@@ -85,65 +92,94 @@ public class OperationTab extends DriverStationTab {
         private final JToggleButton enableButton;
         private final JToggleButton disableButton;
 
+        @SuppressWarnings({"BroadCatchBlock", "TooBroadCatch"})
         public ControlPanel() {
-            setLayout(new GridBagLayout());
+            setLayout(new MigLayout(
+                    "",
+                    "[grow]0[grow]",
+                    "[]0[]0[]0[]0[grow, :50lp:50lp]"
+            ));
 
             {
                 modeButtonGroup = new ButtonGroup();
 
-                GridBagConstraints modeButtonConstraints = new GridBagConstraints();
-                modeButtonConstraints.fill = GridBagConstraints.VERTICAL;
-                modeButtonConstraints.anchor = GridBagConstraints.LINE_START;
-                modeButtonConstraints.gridwidth = 2;
+                CC modeButtonConstraints = new CC().grow().spanX(2).wrap();
 
                 teleoperatedRadioButton = new JRadioButton("Teleoperated");
                 teleoperatedRadioButton.setSelected(true);
                 modeButtonGroup.add(teleoperatedRadioButton);
-                modeButtonConstraints.gridy = 0;
+                teleoperatedRadioButton.addActionListener(
+                        e -> getCommunicationManager().setMode(CommunicationManager.DriverStationMode.TELEOPERATED)
+                );
                 add(teleoperatedRadioButton, modeButtonConstraints);
 
                 autonomousRadioButton = new JRadioButton("Autonomous");
                 modeButtonGroup.add(autonomousRadioButton);
-                modeButtonConstraints.gridy = 1;
+                autonomousRadioButton.addActionListener(
+                        e -> getCommunicationManager().setMode(CommunicationManager.DriverStationMode.AUTONOMOUS)
+                );
                 add(autonomousRadioButton, modeButtonConstraints);
 
                 practiceRadioButton = new JRadioButton("Practice");
                 modeButtonGroup.add(practiceRadioButton);
-                modeButtonConstraints.gridy = 2;
+                practiceRadioButton.addActionListener(
+                        e -> getCommunicationManager().setMode(CommunicationManager.DriverStationMode.PRACTICE)
+                );
                 add(practiceRadioButton, modeButtonConstraints);
 
                 testRadioButton = new JRadioButton("Test");
                 modeButtonGroup.add(testRadioButton);
-                modeButtonConstraints.gridy = 3;
+                testRadioButton.addActionListener(
+                        e -> getCommunicationManager().setMode(CommunicationManager.DriverStationMode.TEST)
+                );
                 add(testRadioButton, modeButtonConstraints);
             }
 
             {
                 enableDisableButtonGroup = new ButtonGroup();
 
-                GridBagConstraints buttonConstraints = new GridBagConstraints();
-                buttonConstraints.fill = GridBagConstraints.BOTH;
-                buttonConstraints.anchor = GridBagConstraints.LINE_START;
-                buttonConstraints.gridy = 4;
-                buttonConstraints.gridheight = 1;
-                buttonConstraints.ipady = 10;
+                CC buttonConstraints = new CC().grow().pad(5, 5, 5, 5);
 
                 Font buttonFont = new Font("", Font.BOLD, 14);
 
                 enableButton = new JToggleButton("Enable");
                 enableButton.setForeground(Color.decode("#088A08"));
-                buttonConstraints.gridx = 0;
                 enableButton.setFont(buttonFont);
+                enableButton.addActionListener(e -> getCommunicationManager().setEnabled(true));
                 enableDisableButtonGroup.add(enableButton);
                 add(enableButton, buttonConstraints);
 
                 disableButton = new JToggleButton("Disable");
                 disableButton.setSelected(true);
                 disableButton.setForeground(Color.RED);
-                buttonConstraints.gridx = 1;
                 disableButton.setFont(buttonFont);
+                disableButton.addActionListener(e -> getCommunicationManager().setEnabled(false));
                 enableDisableButtonGroup.add(disableButton);
                 add(disableButton, buttonConstraints);
+            }
+            {
+                Provider.logger.setLevel(Level.WARNING);
+                Provider shortcutProvider = Provider.getCurrentProvider(true);
+                shortcutProvider.register(KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), e -> {
+                    getCommunicationManager().setEnabled(true);
+                });
+                shortcutProvider.register(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), e -> {
+
+                });
+                shortcutProvider.register(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), e -> {
+                    getCommunicationManager().setEnabled(false);
+                });
+            }
+            {
+                getCommunicationManager().addPropertyChangeListener(evt -> {
+                    switch (evt.getPropertyName()) {
+                        case CommunicationManager.ENABLED_PROPERTY:
+                            JToggleButton b = ((boolean) evt.getNewValue()) ? enableButton : disableButton;
+                            b.setSelected(true);
+                            b.requestFocusInWindow();
+                            break;
+                    }
+                });
             }
         }
 
@@ -159,48 +195,36 @@ public class OperationTab extends DriverStationTab {
         private final JToggleButton dockedModeButton;
 
         public StatusPanel() {
-            setLayout(new GridBagLayout());
+            setLayout(new MigLayout(
+                    "",
+                    "[][grow]0[grow]",
+                    ""
+            ));
 
-            GridBagConstraints labelConstraints = new GridBagConstraints();
-            labelConstraints.fill = GridBagConstraints.BOTH;
-            labelConstraints.weighty = 1.0;
-            labelConstraints.insets.right = 5;
-
+            CC labelConstraints = new CC().alignX("right").alignY("center");
             {
                 add(new JLabel("Elapsed Time"), labelConstraints);
                 elapsedTimeTextField = new JTextField();
-                GridBagConstraints elapsedTimeConstraints = new GridBagConstraints();
-                elapsedTimeConstraints.fill = GridBagConstraints.HORIZONTAL;
-                elapsedTimeConstraints.gridx = 1;
-                elapsedTimeConstraints.gridy = 0;
-                elapsedTimeConstraints.gridwidth = 2;
-                add(elapsedTimeTextField, elapsedTimeConstraints);
+                add(elapsedTimeTextField, "growx, wrap, spanx 2");
             }
 
             {
-                labelConstraints.gridy = 1;
                 add(new JLabel("Window Mode"), labelConstraints);
-                GridBagConstraints windowModeConstraints = new GridBagConstraints();
-                windowModeConstraints.gridx = 1;
-                windowModeConstraints.gridy = 1;
-                windowModeConstraints.gridwidth = 1;
-                windowModeConstraints.fill = GridBagConstraints.BOTH;
-                windowModeConstraints.weightx = 1.0;
-                
+
                 windowModeButtonGroup = new ButtonGroup();
                 floatingModeButton = new JToggleButton(ResourceManager.getFloatingIcon());
-                floatingModeButton.addActionListener((e)-> getMainWindow().setDocked(false));
+                floatingModeButton.setToolTipText("Float Window");
+                floatingModeButton.addActionListener((e) -> getMainWindow().setDocked(false));
                 windowModeButtonGroup.add(floatingModeButton);
-                add(floatingModeButton, windowModeConstraints);
+                add(floatingModeButton, "grow, gap 0");
                 dockedModeButton = new JToggleButton(ResourceManager.getDockedIcon());
-                dockedModeButton.addActionListener((e)-> getMainWindow().setDocked(true));
-                windowModeConstraints.gridx = 2;
+                dockedModeButton.setToolTipText("Dock Window");
+                dockedModeButton.addActionListener((e) -> getMainWindow().setDocked(true));
                 windowModeButtonGroup.add(dockedModeButton);
-                add(dockedModeButton, windowModeConstraints);
+                add(dockedModeButton, "grow, gap 0, wrap");
             }
 
             {
-                labelConstraints.gridy = 2;
                 add(new JLabel("Team Station"), labelConstraints);
                 teamStationComboBox = new JComboBox<>(new AlliancePosition[]{
                     AlliancePosition.BLUE1,
@@ -210,11 +234,12 @@ public class OperationTab extends DriverStationTab {
                     AlliancePosition.RED2,
                     AlliancePosition.RED3
                 });
-                GridBagConstraints teamStationConstraints = new GridBagConstraints();
-                teamStationConstraints.gridx = 1;
-                teamStationConstraints.gridy = 2;
-                teamStationConstraints.gridwidth = 2;
-                add(teamStationComboBox, teamStationConstraints);
+                teamStationComboBox.addItemListener((e) -> {
+                    AlliancePosition ap = (AlliancePosition) e.getItem();
+                    getCommunicationManager().setAlliance(ap.getAlliance());
+                    getCommunicationManager().setPosition(ap.getPosition());
+                });
+                add(teamStationComboBox, "spanx 2, growx");
             }
         }
 
@@ -227,58 +252,42 @@ public class OperationTab extends DriverStationTab {
         private final JLabel messageLabel;
 
         public MessagePanel() {
-            setLayout(new GridBagLayout());
+            setLayout(new MigLayout());
 
             messageLabel = new JLabel("User Messages");
-            GridBagConstraints messageLabelConstraints = new GridBagConstraints();
-            messageLabelConstraints.anchor = GridBagConstraints.LINE_START;
-            add(messageLabel, messageLabelConstraints);
+            add(messageLabel, "wrap");
 
             messageTextArea = new JTextArea();
             messageTextArea.setEditable(false);
-            messageTextArea.setColumns(25);
-            GridBagConstraints messageConstraints = new GridBagConstraints();
-            messageConstraints.fill = GridBagConstraints.BOTH;
-            messageConstraints.gridy = 1;
-            messageConstraints.weightx = 1.0;
-            messageConstraints.weighty = 1.0;
-            add(messageTextArea, messageConstraints);
+            messageTextArea.setColumns(21);
+            messageTextArea.setRows(6);
+            add(messageTextArea, "");
         }
 
     }
     private final MessagePanel messagePanel;
 
-    public OperationTab(MainWindow mainWindow) {
-        super(mainWindow);
+    public OperationTab() {
 
-        setLayout(new GridBagLayout());
+        setLayout(new MigLayout(
+                "",
+                "[][grow, ::300px][shrink]",
+                "grow"
+        ));
 
         {
             controlPanel = new ControlPanel();
-            GridBagConstraints controlPanelConstraints = new GridBagConstraints();
-            controlPanelConstraints.insets = new Insets(5, 5, 5, 5);
-            controlPanelConstraints.gridx = 0;
-            controlPanelConstraints.fill = GridBagConstraints.VERTICAL;
-            add(controlPanel, controlPanelConstraints);
+            add(controlPanel, "growy");
         }
 
         {
             statusPanel = new StatusPanel();
-            GridBagConstraints statusPanelConstraints = new GridBagConstraints();
-            statusPanelConstraints.insets = new Insets(5, 5, 5, 5);
-            statusPanelConstraints.gridx = 1;
-            statusPanelConstraints.fill = GridBagConstraints.VERTICAL;
-            add(statusPanel, statusPanelConstraints);
+            add(statusPanel, "grow");
         }
 
         {
             messagePanel = new MessagePanel();
-            GridBagConstraints messagePanelConstraints = new GridBagConstraints();
-            messagePanelConstraints.insets = new Insets(5, 5, 5, 5);
-            messagePanelConstraints.gridx = 2;
-            messagePanelConstraints.weightx = 1.0;
-            messagePanelConstraints.fill = GridBagConstraints.BOTH;
-            add(messagePanel, messagePanelConstraints);
+            add(messagePanel, "aligny top");
         }
     }
 }
