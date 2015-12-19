@@ -3,6 +3,8 @@
 
 ### A cross platform driver station for FRC robots, written in Java.
 
+# Notice: This project is abandoned and outdated. See [QDriverStation](https://github.com/WinT-3794/QDriverStation) if you want an actively developed open source driver station that supports the roboRIO.###
+
 **Warning:** This software has the ability to control a potentially dangerous robot, so please use caution and common sense. While I try to make it as safe as possible, I take no responsilibity for damage or injury caused by using this software.
 
 **Notice:** This software is in the first stages of development and therefore has many bugs and few features. As of this writing, only one way robot communication is implemented and the GUI is incomplete. Feel free to try it out and see what I am working on, or help me implement new features and fix bugs, but do not expect a stable product yet.

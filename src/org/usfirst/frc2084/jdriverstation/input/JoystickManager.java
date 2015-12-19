@@ -11,12 +11,14 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EventListener;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.SwingUtilities;
 import javax.swing.event.EventListenerList;
 import net.java.games.input.Component;
 import net.java.games.input.Controller;
@@ -45,16 +47,15 @@ public class JoystickManager {
         public void joystickAdded(Controller c);
 
         public void joystickRemoved(Controller c);
-
     }
 
     private ControllerEnvironment controllerEnvironment;
-    private HashMap<Controller, Integer> joystickIds = new HashMap<>();
-    private List<Integer> joystickPositions = new ArrayList<>();
-    private List<Controller> joysticks = new ArrayList<Controller>() {
+    private final HashMap<Controller, Integer> joystickIds = new HashMap<>();
+    private final List<Integer> joystickPositions = new ArrayList<>();
+    private final List<Controller> joysticks = new ArrayList<Controller>() {
 
         @Override
-        public void add(int i, Controller e) {
+        public void add(final int i, final Controller e) {
             int id = getJoystickId(e);
             joystickPositions.add(i, id);
             getPreferencesManager().setJoystickPositions(joystickPositions);
@@ -62,7 +63,7 @@ public class JoystickManager {
         }
 
         @Override
-        public boolean add(Controller j) {
+        public boolean add(final Controller j) {
             PreferencesManager pm = getPreferencesManager();
             int id = getJoystickId(j);
             int pos = pm.getJoystickPosition(id);
@@ -77,7 +78,7 @@ public class JoystickManager {
         }
 
         @Override
-        public boolean remove(Object o) {
+        public boolean remove(final Object o) {
             if (o instanceof Controller) {
                 joystickPositions.remove(getJoystickId((Controller) o));
                 getPreferencesManager().setJoystickPositions(joystickPositions);
@@ -88,12 +89,13 @@ public class JoystickManager {
         }
 
         @Override
-        public Controller remove(int index) {
+        public Controller remove(final int index) {
             joystickPositions.remove(index);
             return super.remove(index);
         }
 
     };
+    private final List<Controller> unmodifiableJoysticks = Collections.unmodifiableList(joysticks);
     private final ControllerListener controllerListener;
     private final EventListenerList joystickListeners = new EventListenerList();
 
@@ -104,60 +106,70 @@ public class JoystickManager {
         controllerListener = new ControllerListener() {
 
             @Override
-            public void controllerRemoved(ControllerEvent ev) {
-                Controller c = ev.getController();
-                Controller.Type t = c.getType();
+            public void controllerRemoved(final ControllerEvent ev) {
+
+                final Controller c = ev.getController();
+                final Controller.Type t = c.getType();
                 if (t.equals(Controller.Type.STICK) || t.equals(Controller.Type.GAMEPAD)) {
-                    fireJoystickRemoved(c);
-                    joysticks.remove(ev.getController());
-                    joystickIds.remove(c);
+                    synchronized (joysticks) {
+                        joysticks.remove(ev.getController());
+                        joystickIds.remove(c);
+                    }
+                    SwingUtilities.invokeLater(() -> fireJoystickRemoved(c));
                 }
+
             }
 
             @Override
-            public void controllerAdded(ControllerEvent ev) {
-                Controller c = ev.getController();
-                Controller.Type t = c.getType();
-                if (t.equals(Controller.Type.STICK) || t.equals(Controller.Type.GAMEPAD)) {
-                    joystickIds.put(c, joystickIds.size());
-                    joysticks.add(ev.getController());
-                    fireJoystickAdded(c);
-                }
+            public void controllerAdded(final ControllerEvent ev) {
+                SwingUtilities.invokeLater(() -> {
+                    final Controller c = ev.getController();
+                    final Controller.Type t = c.getType();
+                    if (t.equals(Controller.Type.STICK) || t.equals(Controller.Type.GAMEPAD)) {
+                        synchronized (joysticks) {
+                            joystickIds.put(c, joystickIds.size());
+                            joysticks.add(ev.getController());
+                        }
+                        SwingUtilities.invokeLater(() -> fireJoystickAdded(c));
+                    }
+                });
             }
         };
         controllerEnvironment.addControllerListener(controllerListener);
 
         getCommunicationManager().setJoystickUpdater(robotJoysticks -> {
-            for (int j = 0; j < Math.min(joysticks.size(), robotJoysticks.size()); j++) {
-                Controller dsJoystick = joysticks.get(j);
-                Joystick robotJoystick = robotJoysticks.get(j);
+            synchronized (joysticks) {
+                for (int j = 0; j < Math.min(joysticks.size(), robotJoysticks.size()); j++) {
+                    final Controller dsJoystick = joysticks.get(j);
+                    final Joystick robotJoystick = robotJoysticks.get(j);
 
-                if (dsJoystick.poll()) {
+                    if (dsJoystick.poll()) {
 
-                    Component[] components = dsJoystick.getComponents();
+                        final Component[] components = dsJoystick.getComponents();
 
-                    int axisIndex = 1;
-                    int buttonIndex = 1;
-                    for (Component c : components) {
-                        if (c.isAnalog() && axisIndex <= Joystick.NUM_AXES) {
-                            robotJoystick.setAxis(axisIndex++, c.getPollData());
-                        } else if (buttonIndex <= Joystick.NUM_BUTTONS) {
-                            robotJoystick.setButton(buttonIndex++, c.getPollData() == 1.0f);
+                        int axisIndex = 1;
+                        int buttonIndex = 1;
+                        for (Component c : components) {
+                            if (c.isAnalog() && axisIndex <= Joystick.NUM_AXES) {
+                                robotJoystick.setAxis(axisIndex++, c.getPollData());
+                            } else if (buttonIndex <= Joystick.NUM_BUTTONS) {
+                                robotJoystick.setButton(buttonIndex++, c.getPollData() == 1.0f);
+                            }
                         }
+                    } else {
+                        joysticks.remove(j);
+                        SwingUtilities.invokeLater(() -> fireJoystickRemoved(dsJoystick));
                     }
-                } else {
-                    fireJoystickRemoved(dsJoystick);
-                    joysticks.remove(j);
                 }
             }
         });
     }
 
     private void initializeJoysticks() {
-        Controller[] controllers = controllerEnvironment.getControllers();
+        final Controller[] controllers = controllerEnvironment.getControllers();
         for (int i = 0; i < controllers.length; i++) {
-            Controller j = controllers[i];
-            Controller.Type t = j.getType();
+            final Controller j = controllers[i];
+            final Controller.Type t = j.getType();
             if (t == Controller.Type.GAMEPAD || t == Controller.Type.STICK) {
                 joystickIds.put(j, i);
                 joysticks.add(j);
@@ -168,20 +180,22 @@ public class JoystickManager {
     }
 
     public List<Controller> getJoysticks() {
-        return joysticks;
+        return unmodifiableJoysticks;
     }
 
     @SuppressWarnings("CallToThreadRun")
     public boolean rescan() {
-        joysticks.clear();
-        joystickIds.clear();
-        joystickPositions.clear();
-        joysticks.stream().forEach(this::fireJoystickRemoved);
+        synchronized (joysticks) {
+            joysticks.clear();
+            joystickIds.clear();
+            joystickPositions.clear();
+            joysticks.stream().forEach(this::fireJoystickRemoved);
+        }
         controllerEnvironment.removeControllerListener(controllerListener);
 
-        Collection<Thread> shutdownHooks = ControllerEnvironmentHack.getShutdownHooks();
+        final Collection<Thread> shutdownHooks = ControllerEnvironmentHack.getShutdownHooks();
         if (shutdownHooks != null) {
-            Class linuxEnvClass = ControllerEnvironmentHack.getLinuxEnvironmentShutdownHookClass();
+            final Class linuxEnvClass = ControllerEnvironmentHack.getLinuxEnvironmentShutdownHookClass();
             if (linuxEnvClass != null) {
                 Thread linuxEnvHook = null;
                 for (Thread hook : shutdownHooks) {
@@ -196,7 +210,7 @@ public class JoystickManager {
             }
         }
 
-        ControllerEnvironment ce = ControllerEnvironmentHack.newDefaultControllerEnvironment();
+        final ControllerEnvironment ce = ControllerEnvironmentHack.newDefaultControllerEnvironment();
         if (ce == null) {
             return false;
         }
@@ -210,27 +224,35 @@ public class JoystickManager {
         return true;
     }
 
-    public void addJoystickListener(JoystickListener jl) {
+    public void addJoystickListener(final JoystickListener jl) {
         joystickListeners.add(JoystickListener.class, jl);
     }
 
-    public void removeJoystickListener(JoystickListener jl) {
+    public void removeJoystickListener(final JoystickListener jl) {
         joystickListeners.remove(JoystickListener.class, jl);
     }
 
-    private int getJoystickId(Controller j) {
+    private int getJoystickId(final Controller j) {
         return joystickIds.get(j);
     }
 
-    private void fireJoystickAdded(Controller c) {
+    private void fireJoystickAdded(final Controller c) {
         for (JoystickListener jl : joystickListeners.getListeners(JoystickListener.class)) {
-            jl.joystickAdded(c);
+            try {
+                jl.joystickAdded(c);
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Joystick listener threw exception:", ex);
+            }
         }
     }
 
-    private void fireJoystickRemoved(Controller c) {
+    private void fireJoystickRemoved(final Controller c) {
         for (JoystickListener jl : joystickListeners.getListeners(JoystickListener.class)) {
-            jl.joystickRemoved(c);
+            try {
+                jl.joystickRemoved(c);
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Joystick listener threw exception:", ex);
+            }
         }
     }
 

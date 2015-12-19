@@ -5,48 +5,56 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.EventListenerList;
 
 public class RobotCommunication {
 
-    private final EventListenerList listeners = new EventListenerList();
-
     public static final int OUTBOUND_PORT = 1110;
     public static final int INBOUND_PORT = 1150;
+    public static final int DISCONNECTION_TIMEOUT = 100;
 
-    private final Timer communicationThread;
+    private static final Logger logger = Logger.getLogger(RobotCommunication.class.getName());
+
+    private final EventListenerList listeners = new EventListenerList();
 
     private final Robot robot;
     private final DriverStation driverStation;
 
     private InetAddress robotAddress;
-    private boolean connected;
+    private volatile boolean connected;
 
     private final byte[] robotData = new byte[Robot.Data.PACKET_LENGTH];
     private final DatagramSocket outboundSocket;
     private final DatagramPacket outboundPacket;
+    private final Timer dataSendThread;
 
     private final byte[] driverStationData = new byte[DriverStation.Data.PACKET_LENGTH];
     private final DatagramSocket inboundSocket;
     private final DatagramPacket inboundPacket;
+    private final Thread dataReceiveThread;
 
-    public RobotCommunication(Robot robot, InetAddress robotAddress, DriverStation driverStation) throws SocketException {
+    public RobotCommunication(Robot robot, DriverStation driverStation, InetAddress robotAddress) throws SocketException {
         this.robot = robot;
         this.robotAddress = robotAddress;
         this.driverStation = driverStation;
 
         outboundSocket = new DatagramSocket();
         outboundPacket = new DatagramPacket(robotData, robotData.length, robotAddress, OUTBOUND_PORT);
+        dataSendThread = new Timer("Data Send Thread", true);
 
         inboundSocket = new DatagramSocket(INBOUND_PORT);
+        inboundSocket.setSoTimeout(DISCONNECTION_TIMEOUT);
         inboundPacket = new DatagramPacket(driverStationData, driverStationData.length);
-
-        communicationThread = new Timer("Communication Thread");
+        dataReceiveThread = new Thread(new DataReceiveTask(), "Data Recieve Thread");
+        dataReceiveThread.setDaemon(true);
     }
 
-    private class CommunicationTask extends TimerTask {
+    private class DataSendTask extends TimerTask {
 
         @Override
         public void run() {
@@ -57,9 +65,43 @@ public class RobotCommunication {
             try {
                 outboundSocket.send(outboundPacket);
             } catch (IOException ex) {
+                logger.log(Level.WARNING, "Unable to send data to robot:", ex);
             }
             firePostSend();
         }
+    }
+
+    private class DataReceiveTask extends Thread {
+
+        @Override
+        public void run() {
+            for (;;) {
+                try {
+                    inboundSocket.receive(inboundPacket);
+                    if (!connected) {
+                        connected = true;
+                        fireRobotConnected();
+                    }
+                    firePreReceive();
+                    driverStation.setData(driverStationData);
+                    firePostReceive();
+                } catch (SocketTimeoutException ex) {
+                    if (connected) {
+                        connected = false;
+                        fireRobotDisconnected();
+                    }
+                } catch (SocketException ex) {
+                    if (inboundSocket.isClosed()) {
+                        break;
+                    } else {
+                        logger.log(Level.WARNING, "Unable to receive data from robot:", ex);
+                    }
+                } catch (IOException ex) {
+                    logger.log(Level.WARNING, "Unable to receive data from robot:", ex);
+                }
+            }
+        }
+
     }
 
     public InetAddress getRobotAddress() {
@@ -70,7 +112,7 @@ public class RobotCommunication {
         this.robotAddress = robotAddress;
         outboundPacket.setAddress(robotAddress);
     }
-    
+
     public DriverStation getDriverStation() {
         return driverStation;
     }
@@ -80,15 +122,15 @@ public class RobotCommunication {
     }
 
     public void start() {
-        // Temporary until real connection detection is implemented.
-        connected = true;
-        fireRobotConnected();
-        communicationThread.schedule(new CommunicationTask(), 0, 20);
+        dataReceiveThread.start();
+        dataSendThread.schedule(new DataSendTask(), 0, 20);
     }
 
     public void stop() {
-        communicationThread.cancel();
+        dataSendThread.cancel();
         outboundSocket.close();
+
+        inboundSocket.close();
     }
 
     public void addCommunicationListener(CommunicationListener cl) {
@@ -101,45 +143,69 @@ public class RobotCommunication {
 
     private void firePreSend() {
         for (CommunicationListener cl : listeners.getListeners(CommunicationListener.class)) {
-            cl.preSend();
+            try {
+                cl.preSend();
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Communication listener threw exception:", ex);
+            }
         }
     }
 
     private void firePostSend() {
         for (CommunicationListener cl : listeners.getListeners(CommunicationListener.class)) {
-            cl.postSend();
+            try {
+                cl.postSend();
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Communication listener threw exception:", ex);
+            }
         }
     }
 
     private void firePreReceive() {
         for (CommunicationListener cl : listeners.getListeners(CommunicationListener.class)) {
-            cl.preReceive();
+            try {
+                cl.preReceive();
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Communication listener threw exception:", ex);
+            }
         }
     }
 
     private void firePostReceive() {
         for (CommunicationListener cl : listeners.getListeners(CommunicationListener.class)) {
-            cl.postReceive();
+            try {
+                cl.postReceive();
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Communication listener threw exception:", ex);
+            }
         }
     }
-    
+
     public void addConnectionListener(ConnectionListener cl) {
         listeners.add(ConnectionListener.class, cl);
     }
-    
+
     public void removeConnectionListener(ConnectionListener cl) {
         listeners.add(ConnectionListener.class, cl);
     }
-    
+
     private void fireRobotConnected() {
         for (ConnectionListener cl : listeners.getListeners(ConnectionListener.class)) {
-            cl.robotConnected();
+            try {
+                cl.robotConnected();
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Connection listener threw exception:", ex);
+            }
         }
     }
-    
+
     private void fireRobotDisconnected() {
         for (ConnectionListener cl : listeners.getListeners(ConnectionListener.class)) {
-            cl.robotDisconnected();
+            try {
+                cl.robotDisconnected();
+            } catch (Exception ex) {
+                logger.log(Level.WARNING, "Connection listener threw exception:", ex);
+            }
         }
     }
 }

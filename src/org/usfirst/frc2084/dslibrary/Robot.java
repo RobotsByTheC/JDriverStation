@@ -17,6 +17,7 @@ import java.util.zip.CRC32;
  */
 public class Robot {
     
+    public static final String VERSION = "01041400";
     public static final int NUM_JOYSTICKS = 4;
 
     public static enum Mode {
@@ -118,26 +119,26 @@ public class Robot {
 
     public void eStop() {
         estopped = true;
-        data.setEStop(estopped);
+        data.setEStopped(estopped);
     }
 
     public List<Joystick> getJoysticks() {
         return unmodifiableJoysticks;
     }
 
-    public class Data {
+    class Data {
 
         public static final int PACKET_LENGTH = 1024;
         public static final int PACKET_NUMBER_INDEX = 0;
         public static final int FLAG_INDEX = 2;
-        public static final byte FLAG_RESET_MASK = (byte) 0b10000000;
-        public static final byte FLAG_NOT_ESTOP_MASK = 0b01000000;
-        public static final byte FLAG_ENABLE_MASK = 0b00100000;
-        public static final byte FLAG_AUTO_MASK = 0b00010000;
-        public static final byte FLAG_FMS_ATTACHED_MASK = 0b00001000;
-        public static final byte FLAG_RESYNC_MASK = 0b00000100;
-        public static final byte FLAG_TEST_MASK = 0b00000010;
-        public static final byte FLAG_CHECK_VERSIONs_MASK = 0b00000001;
+        public static final char FLAG_RESET_MASK = 0b10000000;
+        public static final char FLAG_NOT_ESTOP_MASK = 0b01000000;
+        public static final char FLAG_ENABLE_MASK = 0b00100000;
+        public static final char FLAG_AUTO_MASK = 0b00010000;
+        public static final char FLAG_FMS_ATTACHED_MASK = 0b00001000;
+        public static final char FLAG_RESYNC_MASK = 0b00000100;
+        public static final char FLAG_TEST_MASK = 0b00000010;
+        public static final char FLAG_CHECK_VERSIONS_MASK = 0b00000001;
         public static final int DIGITAL_INPUT_INDEX = 3;
         public static final int TEAM_NUMBER_INDEX = 4;
         public static final int ALLIANCE_COLOR_INDEX = 6;
@@ -152,40 +153,18 @@ public class Robot {
         private final byte[] data = new byte[PACKET_LENGTH];	//The byte array to hold everything.
 
 
-        /*
-         * data[0] and data[1]: packet index
-         * data[2]: control byte: reset not_e_stop enabled auto fms_attached resync test fpga
-         * data[3]: digital input bits.
-         * data[4] and data[5]: team number
-         * data[6]: alliance, either red 'R' or blue 'B'
-         * data[7]: position
-         * data[8]: joystick 1 x value
-         * data[9]: joystick 1 y value
-         * data[14-15]: joystick 1 buttons bits backward format ...8 7 6 5 4 3 2 1
-         * data[1020] to data[1023]: CRC checksum.
-         */
         public Data() {
-            data[FLAG_INDEX] |= FLAG_NOT_ESTOP_MASK; //Set the not_e_stop control bit.
+            setFlag(FLAG_INDEX, FLAG_NOT_ESTOP_MASK, true); //Set the not_e_stop control bit.
 
-            // Driverstation version, not sure if it needs this or not,
-            // I just used the numbers on the packets captured from the original
-            // driver station.
-            data[72] = (byte) 0x30;
-            data[73] = (byte) 0x31;
-            data[74] = (byte) 0x30;
-            data[75] = (byte) 0x34;
-            data[76] = (byte) 0x31;
-            data[77] = (byte) 0x34;
-            data[78] = (byte) 0x30;
-            data[79] = (byte) 0x30;
+            System.arraycopy(VERSION.getBytes(), 0, data, VERSION_INDEX, 8);
         }
 
-        public void setPacketNumber(int num) {
+        public synchronized void setPacketNumber(short num) {
             data[PACKET_NUMBER_INDEX] = (byte) ((num & 0xFF00) >> 8);
             data[PACKET_NUMBER_INDEX + 1] = (byte) (num & 0xFF);
         }
         
-        private void setFlag(int index, byte mask, boolean value) {
+        private synchronized void setFlag(int index, char mask, boolean value) {
             if (value) {
                 data[index] |= mask;
             } else {
@@ -197,7 +176,7 @@ public class Robot {
             setFlag(FLAG_INDEX, FLAG_RESET_MASK, reset);
         }
 
-        public void setEStop(boolean estop) {
+        public void setEStopped(boolean estop) {
             setFlag(FLAG_INDEX, FLAG_NOT_ESTOP_MASK, !estop);
         }
 
@@ -222,32 +201,32 @@ public class Robot {
         }
 
         public void setCheckVersions(boolean checkVersions) {
-            setFlag(FLAG_INDEX, FLAG_CHECK_VERSIONs_MASK, checkVersions);
+            setFlag(FLAG_INDEX, FLAG_CHECK_VERSIONS_MASK, checkVersions);
         }
 
-        public void setDigitalInput(int port, boolean set) {												//digital io port number with base 0.
-            byte mask = (byte) (0x1 << port);
+        public void setDigitalInput(byte port, boolean set) {												//digital io port number with base 0.
+            char mask = (char) (0x1 << port);
             setFlag(DIGITAL_INPUT_INDEX, mask, set);
         }
 
-        public void setTeamNumber(short teamNum) {
+        public synchronized void setTeamNumber(short teamNum) {
             data[TEAM_NUMBER_INDEX] = (byte) ((teamNum & 0xff00) >>> 8);
             data[TEAM_NUMBER_INDEX + 1] = (byte) (teamNum & 0xff);
         }
 
-        public void setAllianceColor(char redOrBlue) {
+        public synchronized void setAllianceColor(char redOrBlue) {
             data[ALLIANCE_COLOR_INDEX] = (byte) redOrBlue;
         }
 
-        public void setAlliancePosition(byte pos) {
+        public synchronized void setAlliancePosition(byte pos) {
             data[ALLIANCE_POSITION_INDEX] = (byte) (pos + 48);
         }
 
-        public void setJoystickAxis(int joystick, byte axis, byte value) {
+        public synchronized void setJoystickAxis(byte joystick, byte axis, byte value) {
             data[(joystick * JOYSTICK_MULT) + (axis - 1)] = value;
         }
 
-        public void setJoystickButton(int joystick, byte button, boolean set) {
+        public synchronized void setJoystickButton(byte joystick, byte button, boolean set) {
             int index = joystick * JOYSTICK_MULT + BUTTON_OFFSET;
             short mask = (short) (0x1 << (button - 1));
             if (set) {
@@ -259,13 +238,13 @@ public class Robot {
             }
         }
 
-        public void setAnalogInput(int input, short value) {
+        public synchronized void setAnalogInput(int input, short value) {
             int index = ANALOG_INPUT_INDEX + input * 2;
             data[index] = (byte) ((value & 0xFF00) >>> 8);
             data[index + 1] = (byte) (value & 0xFF);
         }
 
-        public void updateCRC() {
+        public synchronized void updateCRC() {
             crc.update(data, 0, CRC_INDEX);
             long checksum = crc.getValue();
             data[CRC_INDEX] = (byte) ((checksum & 0xff000000) >> 24);
@@ -274,7 +253,7 @@ public class Robot {
             data[CRC_INDEX + 3] = (byte) (checksum & 0xff);
         }
 
-        private void getData(byte[] data) {
+        private synchronized void getData(byte[] data) {
             if (data.length == this.data.length) {
                 System.arraycopy(this.data, 0, data, 0, this.data.length);
             } else {
@@ -284,11 +263,13 @@ public class Robot {
     }
     
     void prepareData() {
-        data.setPacketNumber(packetNumber++);
+        ++packetNumber;
+        packetNumber %= 0xFFFF;
+        data.setPacketNumber((short)packetNumber);
         data.updateCRC();
     }
     
-    public void getData(byte[] data) {
+    void getData(byte[] data) {
         this.data.getData(data);
     }
 }

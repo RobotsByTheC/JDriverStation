@@ -14,16 +14,16 @@ public class Joystick {
 
     public static final int NUM_AXES = 6;
     public static final int NUM_BUTTONS = 12;
-    
-    private final Robot.Data robotData;
 
-    private final int num;
+    private final Robot.Data data;
+
+    private final byte num;
     private final float[] axes = new float[NUM_AXES];
     private final boolean[] buttons = new boolean[NUM_BUTTONS];
 
-    public Joystick(int num, Robot.Data robotData) {
-        this.num = num;
-        this.robotData = robotData;
+    Joystick(int num, Robot.Data data) {
+        this.num = (byte) num;
+        this.data = data;
     }
 
     public float getAxis(int axis) {
@@ -36,7 +36,7 @@ public class Joystick {
                 throw new IllegalArgumentException("Axis value must be between -1 and 1.");
             } else {
                 axes[axis - 1] = value;
-                robotData.setJoystickAxis(num, (byte) axis, (byte) (value * (value < 0 ? 128 : 127)));
+                data.setJoystickAxis(num, (byte) axis, (byte) (value * (value < 0 ? 128 : 127)));
             }
         } catch (ArrayIndexOutOfBoundsException ex) {
             throw new IllegalArgumentException("Axis index must be between 1 and " + axes.length + ".", ex);
@@ -50,9 +50,13 @@ public class Joystick {
     public void setButton(int button, boolean pressed) {
         try {
             buttons[button - 1] = pressed;
-            robotData.setJoystickButton(num, (byte) button, pressed);
+            data.setJoystickButton(num, (byte) button, pressed);
         } catch (ArrayIndexOutOfBoundsException ex) {
             throw new IllegalArgumentException("Button index must be between 1 and " + buttons.length + ".", ex);
         }
+    }
+
+    public int getNum() {
+        return num;
     }
 }

@@ -15,6 +15,7 @@ import java.util.EventListener;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.SwingUtilities;
 import org.usfirst.frc2084.dslibrary.CommunicationAdapter;
 import org.usfirst.frc2084.dslibrary.CommunicationListener;
 import org.usfirst.frc2084.dslibrary.ConnectionListener;
@@ -29,7 +30,7 @@ import static org.usfirst.frc2084.jdriverstation.gui.ApplicationElement.*;
  *
  * @author Ben Wolsieffer
  */
-public class CommunicationManager {
+public final class CommunicationManager {
 
     public static enum DriverStationMode {
 
@@ -74,7 +75,7 @@ public class CommunicationManager {
         {
             RobotCommunication rc;
             try {
-                rc = new RobotCommunication(robot, getIPFromTeamNumber(teamNumber), driverStation);
+                rc = new RobotCommunication(robot, driverStation, getIPFromTeamNumber(teamNumber));
                 rc.start();
             } catch (SocketException ex) {
                 rc = null;
@@ -87,6 +88,9 @@ public class CommunicationManager {
 
             @Override
             public void preSend() {
+                // Needs to occur on the same thread as robot communication to
+                // make sure the joysticks are updated each time a packet is
+                // sent.
                 updateJoysticks();
             }
 
@@ -96,12 +100,14 @@ public class CommunicationManager {
 
             @Override
             public void robotConnected() {
-                firePropertyChange(CONNECTED_PROPERTY, false, true);
+                SwingUtilities.invokeLater(()
+                        -> firePropertyChange(CONNECTED_PROPERTY, false, true));
             }
 
             @Override
             public void robotDisconnected() {
-                firePropertyChange(CONNECTED_PROPERTY, true, false);
+                SwingUtilities.invokeLater(()
+                        -> firePropertyChange(CONNECTED_PROPERTY, true, false));
             }
         });
     }
@@ -196,7 +202,7 @@ public class CommunicationManager {
     public void addPropertyChangeListener(PropertyChangeListener pl) {
         pcs.addPropertyChangeListener(pl);
     }
-    
+
     public void addPropertyChangeListener(String property, PropertyChangeListener pl) {
         pcs.removePropertyChangeListener(property, pl);
     }
@@ -204,7 +210,7 @@ public class CommunicationManager {
     public void removePropertyChangeListener(PropertyChangeListener pl) {
         pcs.removePropertyChangeListener(pl);
     }
-    
+
     public void removePropertyChangeListener(String property, PropertyChangeListener pl) {
         pcs.removePropertyChangeListener(property, pl);
     }
